@@ -78,7 +78,44 @@ function compressImage(file){return new Promise((resolve,reject)=>{const r=new F
 async function previewImages(e){const files=[...e.target.files].filter(f=>f.type.startsWith('image/'));if(!files.length)return;const grid=document.getElementById('previewGrid');grid.innerHTML='';pendingImages=[];for(const f of files){try{const data=await compressImage(f);pendingImages.push(data);const img=document.createElement('img');img.src=data;grid.appendChild(img)}catch(err){}}}
 function showImages(arr){const grid=document.getElementById('previewGrid');grid.innerHTML='';(Array.isArray(arr)?arr:[arr].filter(Boolean)).forEach(src=>{const img=document.createElement('img');img.src=src;grid.appendChild(img)})}
 function editProduct(id){const p=products.find(x=>x.id===id);if(!p)return;if(!categories.includes(p.c)){categories.push(p.c);safeSet('cajCategories',categories)}editId=id;document.getElementById('formTitle').textContent='EDIT PRODUCT';document.getElementById('pid').value=id;document.getElementById('name').value=p.n;document.getElementById('price').value=p.basePrice||p.p;populateCategorySelect();document.getElementById('category').value=p.c;document.getElementById('description').value=p.d||'';document.getElementById('stock').value=p.s??0;document.getElementById('tag').value=p.t;pendingImages=imageList(p);showImages(pendingImages);showSection('products',document.querySelectorAll('.admin-nav button')[1]);window.scrollTo({top:0,behavior:'smooth'})}
-async function saveProduct(){const n=document.getElementById('name').value.trim(),base=Number(document.getElementById('price').value),c=document.getElementById('category').value,d=document.getElementById('description').value.trim(),st=Number(document.getElementById('stock').value),t=document.getElementById('tag').value;const imgs=pendingImages.length?pendingImages:imageList(editId?products.find(x=>x.id===editId):{});if(!n||base<=0||st<0||!imgs.length){alert('Kam se kam 1 photo, Name, Price aur Stock fill karo.');return}let old=null;if(editId){old=products.find(a=>a.id===editId);Object.assign(old,{n,p:base,basePrice:base,c,d,s:st,t,i:imgs,oldP:undefined,discountPct:undefined,raisePct:undefined})}else products.unshift({id:Date.now(),n,p:base,basePrice:base,c,d,s:st,t,i:imgs});if(!safeSet('cajProducts',products)){if(!editId)products.shift();return}try{const prepared=await prepareProductsForSupabase(products);await sbFetch('products?id=not.is.null',{method:'DELETE',headers:{Prefer:'return=minimal'}});if(prepared.length)await sbFetch('products',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(prepared.map(localToDb))});await loadSupabaseStore();resetForm();render();alert('Product saved successfully with '+imgs.length+' photo(s). Supabase sync complete.')}catch(e){alert('Product local me save hua, lekin Supabase me sync nahi hua. Error: '+e.message);console.error(e)}}
+async function saveProduct(){
+  const n=document.getElementById('name').value.trim(),
+        base=Number(document.getElementById('price').value),
+        c=document.getElementById('category').value,
+        d=document.getElementById('description').value.trim(),
+        st=Number(document.getElementById('stock').value),
+        t=document.getElementById('tag').value;
+  const imgs=pendingImages.length?pendingImages:imageList(editId?products.find(x=>x.id===editId):{});
+  if(!n||base<=0||st<0||!imgs.length){
+    alert('Kam se kam 1 photo, Name, Price aur Stock fill karo.');
+    return;
+  }
+  const oldProducts=products.map(p=>({...p,i:Array.isArray(p.i)?[...p.i]:p.i}));
+  const draftProducts=products.map(p=>({...p,i:Array.isArray(p.i)?[...p.i]:p.i}));
+  try{
+    const uploadedImgs=await uploadImagesToStorage(imgs,'products');
+    if(editId){
+      const old=draftProducts.find(a=>a.id===editId);
+      if(!old) throw new Error('Product nahi mila.');
+      Object.assign(old,{n,p:base,basePrice:base,c,d,s:st,t,i:uploadedImgs,oldP:undefined,discountPct:undefined,raisePct:undefined});
+    }else{
+      draftProducts.unshift({id:Date.now(),n,p:base,basePrice:base,c,d,s:st,t,i:uploadedImgs});
+    }
+    products=draftProducts;
+    if(!safeSet('cajProducts',products)){products=oldProducts;return;}
+    const rows=products.map(localToDb);
+    await sbFetch('products?id=not.is.null',{method:'DELETE',headers:{Prefer:'return=minimal'}});
+    if(rows.length) await sbFetch('products',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(rows)});
+    await loadSupabaseStore();
+    resetForm();
+    render();
+    alert('Product saved successfully with '+uploadedImgs.length+' photo(s). Supabase sync complete.');
+  }catch(e){
+    products=oldProducts;
+    alert('Photo upload/sync failed: '+e.message);
+    console.error(e);
+  }
+}
 function deleteProduct(id){if(!confirm('Is product ko delete karna hai?'))return;products=products.filter(p=>p.id!==id);safeSet('cajProducts',products);render()}
 function resetForm(){editId=null;pendingImages=[];document.getElementById('formTitle').textContent='ADD PRODUCT';['pid','name','price','stock','description'].forEach(id=>document.getElementById(id).value='');document.getElementById('tag').value='NEW';populateCategorySelect();document.getElementById('category').value=categories[0]||'Necklaces';document.getElementById('previewGrid').innerHTML='';document.getElementById('photo').value=''}
 function exportProducts(){const blob=new Blob([JSON.stringify({categories,products,orders:readJSON('cajOrders',[])},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='chesley-store-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}

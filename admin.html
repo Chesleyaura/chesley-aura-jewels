@@ -131,4 +131,41 @@ async function saveProduct(){
     render(); resetForm(); alert('Product successfully saved ✓');
   }catch(e){console.error(e);alert('Product save failed: '+(e.message||e));}
 }
+
+
+/* FIX: Discount / Price Manager */
+function renderPricingCats(){
+  const groups=[['discountCats','discount'],['raiseCats','raise'],['bothCats','both']];
+  groups.forEach(([id,type])=>{
+    const el=document.getElementById(id); if(!el)return;
+    el.innerHTML=categories.length?categories.map(c=>`<label class="check-item"><input type="checkbox" value="${esc(c)}" data-price-group="${type}" style="width:auto;height:auto"> <span>${esc(c)}</span></label>`).join(''):'<div class="note">Abhi koi category add nahi hai.</div>';
+  });
+}
+function toggleAll(type){
+  const all=document.getElementById(type+'All');
+  document.querySelectorAll(`input[data-price-group="${type}"]`).forEach(x=>x.checked=!!all?.checked);
+}
+function selectedPricingCats(type){return [...document.querySelectorAll(`input[data-price-group="${type}"]:checked`)].map(x=>x.value)}
+async function persistPricing(){safeSet('cajProducts',products);try{await window.cajLastSync}catch(e){console.error(e)}}
+async function applyDiscount(){
+  const cats=selectedPricingCats('discount'),pct=Number(document.getElementById('discountPct')?.value);
+  if(!cats.length)return alert('Discount ke liye category select karo.');
+  if(!Number.isFinite(pct)||pct<0||pct>100)return alert('0 se 100 ke beech discount % bharo.');
+  products=products.map(p=>{if(!cats.includes(p.c))return p;const base=Number(p.basePrice||p.p||0);return {...p,basePrice:base,discountPct:pct,raisePct:Number(p.raisePct||0),p:Math.round(base*(1-Number(p.raisePct||0)/100)*(1-pct/100))}});
+  await persistPricing();render();renderPricingCats();alert('Discount successfully applied.');
+}
+async function applyRaise(){
+  const cats=selectedPricingCats('raise'),pct=Number(document.getElementById('raisePct')?.value);
+  if(!cats.length)return alert('Price raise ke liye category select karo.');
+  if(!Number.isFinite(pct)||pct<0)return alert('Valid increase % bharo.');
+  products=products.map(p=>{if(!cats.includes(p.c))return p;const base=Number(p.basePrice||p.p||0),disc=Number(p.discountPct||0);return {...p,basePrice:base,raisePct:pct,discountPct:disc,p:Math.round(base*(1+pct/100)*(1-disc/100))}});
+  await persistPricing();render();renderPricingCats();alert('Price raise successfully applied.');
+}
+async function applyBoth(){
+  const cats=selectedPricingCats('both'),disc=Number(document.getElementById('bothDiscount')?.value||0),raise=Number(document.getElementById('bothRaise')?.value||0);
+  if(!cats.length)return alert('Category select karo.');
+  if(!Number.isFinite(disc)||disc<0||disc>100||!Number.isFinite(raise)||raise<0)return alert('Valid discount aur increase % bharo.');
+  products=products.map(p=>{if(!cats.includes(p.c))return p;const base=Number(p.basePrice||p.p||0);return {...p,basePrice:base,discountPct:disc,raisePct:raise,p:Math.round(base*(1+raise/100)*(1-disc/100))}});
+  await persistPricing();render();renderPricingCats();alert('Discount + price raise successfully applied.');
+}
 </script></body></html>

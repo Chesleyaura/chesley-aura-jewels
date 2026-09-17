@@ -106,4 +106,29 @@ function clearAnnouncement(){document.getElementById('announcementInput').value=
 document.addEventListener('input',e=>{if(e.target.id==='announcementInput')document.getElementById('announcementPreview').textContent=e.target.value||'Your headline preview will appear here.'});
 (async()=>{await loadSupabaseStore(); products=readJSON('cajProducts',DEFAULT).map(p=>({...p,basePrice:Number(p.basePrice||p.p),p:Number(p.p||0)})); categories=normalizeAdminCategories(readJSON('cajCategories',DEFAULT_CATS)); renderPricingCats();loadAnnouncement();render();})();
 if(sessionStorage.getItem('cajAdmin')==='1'&&sessionStorage.getItem('cajSbToken'))showDash();
+
+/* V3 emergency functional repair: product edit/save + Supabase persistence */
+function editProduct(id){
+  const p=products.find(x=>Number(x.id)===Number(id)); if(!p)return alert('Product nahi mila.');
+  editId=p.id; pendingImages=imageList(p).slice();
+  document.getElementById('formTitle').textContent='EDIT PRODUCT';
+  document.getElementById('pid').value=p.id; document.getElementById('name').value=p.n||'';
+  document.getElementById('price').value=Number(p.p||0); document.getElementById('stock').value=Number(p.s||0);
+  document.getElementById('description').value=p.d||''; document.getElementById('tag').value=p.t||'NEW';
+  populateCategorySelect(); document.getElementById('category').value=p.c||categories[0]||'';
+  document.getElementById('previewGrid').innerHTML=pendingImages.map(src=>`<img src="${src}" alt="Product photo">`).join('');
+  showSection('products',document.querySelectorAll('.admin-nav button')[1]);
+  document.getElementById('name').focus();
+}
+async function saveProduct(){
+  const name=document.getElementById('name').value.trim(), price=Number(document.getElementById('price').value), stock=Number(document.getElementById('stock').value);
+  if(!name||!Number.isFinite(price)||price<0||!Number.isFinite(stock)||stock<0)return alert('Name, price aur stock sahi bharo.');
+  const item={id:editId??(products.reduce((m,x)=>Math.max(m,Number(x.id)||0),0)+1),n:name,p:price,basePrice:price,c:document.getElementById('category').value||'',d:document.getElementById('description').value.trim(),s:stock,t:document.getElementById('tag').value||'NEW',i:pendingImages.slice()};
+  try{
+    if(editId!==null){products=products.map(x=>Number(x.id)===Number(editId)?{...x,...item}:x)}else products=[item,...products];
+    localStorage.setItem('cajProducts',JSON.stringify(products));
+    const db=localToDb(item); if(editId!==null) await sbFetch('products?id=eq.'+encodeURIComponent(item.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(db)}); else await sbFetch('products',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(db)});
+    render(); resetForm(); alert('Product successfully saved ✓');
+  }catch(e){console.error(e);alert('Product save failed: '+(e.message||e));}
+}
 </script></body></html>

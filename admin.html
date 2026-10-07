@@ -44,12 +44,40 @@ async function sbFetch(path, options={}){const useAnon=!!options.useAnon;const c
 async function sbGetAll(){const [psR,csR,ssR]=await Promise.allSettled([sbFetch('products?select=*&order=created_at.desc',{useAnon:true}),sbFetch('categories?select=*&order=id.asc',{useAnon:true}),sbFetch("site_settings?setting_key=in.(announcement,category_icons,hero_settings,promo_poster)&select=setting_key,setting_value",{useAnon:true})]);if(psR.status!=='fulfilled')throw psR.reason||new Error('Products read failed');const ps=Array.isArray(psR.value)?psR.value:[];const cs=csR.status==='fulfilled'&&Array.isArray(csR.value)?csR.value:[];const ss=ssR.status==='fulfilled'&&Array.isArray(ssR.value)?ssR.value:[];const ann=ss.find(x=>x.setting_key==='announcement')?.setting_value||'';const iconRaw=ss.find(x=>x.setting_key==='category_icons')?.setting_value||'';const heroRaw=ss.find(x=>x.setting_key==='hero_settings')?.setting_value||'';const posterRaw=ss.find(x=>x.setting_key==='promo_poster')?.setting_value||'';let categoryIcons={},heroSettings={},promoPoster={};try{categoryIcons=iconRaw?JSON.parse(iconRaw):{}}catch(e){}try{heroSettings=heroRaw?JSON.parse(heroRaw):{}}catch(e){}try{promoPoster=posterRaw?JSON.parse(posterRaw):{}}catch(e){}return {products:ps,categories:cs,announcement:ann,categoryIcons,heroSettings,promoPoster}}
 function localToDb(p){return {id:typeof p.id==='number'?p.id:undefined,name:p.n||'',price:Number(p.p||0),base_price:Number(p.basePrice||p.p||0),category:p.c||'',description:p.d||'',stock:Number(p.s||0),tag:p.t||'NEW',images:Array.isArray(p.i)?p.i.filter(Boolean):[],discount_percent:Number(p.discountPct||0),price_raise_percent:Number(p.raisePct||0)}}
 function dbToLocal(p){return {id:p.id,n:p.name,p:Number(p.price||0),basePrice:Number(p.base_price||p.price||0),c:p.category||'',d:p.description||'',s:Number(p.stock||0),t:p.tag||'NEW',i:Array.isArray(p.images)?p.images:[],discountPct:Number(p.discount_percent||0),raisePct:Number(p.price_raise_percent||0)}}
-async function loadSupabaseStore(){try{let data=null,lastErr=null;for(let attempt=0;attempt<3;attempt++){try{data=await sbGetAll();break}catch(e){lastErr=e;await new Promise(r=>setTimeout(r,500*(attempt+1)))}}if(!data)throw lastErr||new Error('Supabase read failed');const ps=Array.isArray(data.products)?data.products.map(dbToLocal):[];if(!Array.isArray(data.products))throw new Error('Supabase products response was not an array');window.products=ps;products=ps;try{localStorage.setItem('cajProducts',JSON.stringify(ps))}catch(cacheErr){console.warn('Product cache skipped:',cacheErr)}const cs=Array.isArray(data.categories)?normalizeAdminCategories(data.categories.map(x=>x.name)):normalizeAdminCategories([]);window.categories=cs;categories=cs;try{localStorage.setItem('cajCategories',JSON.stringify(cs))}catch(e){};window.announcement=data.announcement||'';try{localStorage.setItem('cajAnnouncement',JSON.stringify(window.announcement))}catch(e){};window.categoryIcons=data.categoryIcons||{};try{localStorage.setItem('cajCategoryIcons',JSON.stringify(window.categoryIcons))}catch(e){};window.heroSettings=data.heroSettings||{};try{localStorage.setItem('cajHeroSettings',JSON.stringify(window.heroSettings))}catch(e){};window.promoPoster=data.promoPoster||{};try{localStorage.setItem('cajPromoPoster',JSON.stringify(window.promoPoster))}catch(e){};window.cajSupabaseProductCount=ps.length;return true}catch(e){console.warn('Supabase read failed; live admin data unavailable.',e);window.cajSupabaseReadError=String(e&&e.message||e);return false}}
+async function loadSupabaseStore(){try{let data=null,lastErr=null;for(let attempt=0;attempt<3;attempt++){try{data=await sbGetAll();break}catch(e){lastErr=e;await new Promise(r=>setTimeout(r,500*(attempt+1)))}}if(!data)throw lastErr||new Error('Supabase read failed');const ps=Array.isArray(data.products)?data.products.map(dbToLocal):[];if(!Array.isArray(data.products))throw new Error('Supabase products response was not an array');window.products=ps;products=ps;try{localStorage.setItem('cajProducts',JSON.stringify(ps))}catch(cacheErr){console.warn('Product cache skipped:',cacheErr)}const cs=Array.isArray(data.categories)?normalizeAdminCategories(data.categories.map(x=>x.name)):normalizeAdminCategories([]);window.categories=cs;categories=cs;try{localStorage.setItem('cajCategories',JSON.stringify(cs))}catch(e){};window.announcement=data.announcement||'';try{localStorage.setItem('cajAnnouncement',JSON.stringify(window.announcement))}catch(e){};window.categoryIcons=data.categoryIcons||{};try{localStorage.setItem('cajCategoryIcons',JSON.stringify(window.categoryIcons))}catch(e){};window.heroSettings=data.heroSettings||{};try{localStorage.setItem('cajHeroSettings',JSON.stringify(window.heroSettings))}catch(e){};window.promoPoster=data.promoPoster||{};window.cajPromoPosterDraft=(window.promoPoster&&Array.isArray(window.promoPoster.posters))?window.promoPoster.posters.slice(0,5):[];try{localStorage.setItem('cajPromoPoster',JSON.stringify(window.promoPoster))}catch(e){console.warn('Poster cache skipped:',e)};window.cajSupabaseProductCount=ps.length;window.cajSupabaseConnected=true;return true}catch(e){console.warn('Supabase read failed; live admin data unavailable.',e);window.cajSupabaseReadError=String(e&&e.message||e);return false}}
 const DEFAULT=[{id:1,n:'Emerald Grace Necklace Set',p:1499,basePrice:1499,c:'Necklaces',d:'Elegant emerald-inspired necklace set with a premium festive finish.',t:'NEW',i:'assets/product1.jpg',s:10},{id:2,n:'Royal Pearl Jhumka',p:699,basePrice:699,c:'Earrings',d:'Classic pearl jhumka design made for an elegant everyday and festive look.',t:'BEST SELLER',i:'assets/product2.jpg',s:10},{id:3,n:'Floral Elegance Necklace',p:1299,basePrice:1299,c:'Necklaces',d:'Delicate floral necklace design with a graceful premium finish.',t:'NEW',i:'assets/product3.jpg',s:10},{id:4,n:'Glossy Hoop Earrings',p:499,basePrice:499,c:'Earrings',d:'Statement glossy hoops with a clean, versatile look.',t:'BEST SELLER',i:'assets/product4.jpg',s:10},{id:5,n:'Rose Gold Bracelet',p:599,basePrice:599,c:'Bracelets',d:'Elegant rose-gold bracelet with a refined everyday sparkle.',t:'NEW',i:'assets/product5.jpg',s:10},{id:6,n:'Royal Halo Ring',p:449,basePrice:449,c:'Rings',d:'Classic halo-style ring with a polished premium appearance.',t:'BEST SELLER',i:'assets/product4.jpg',s:10},{id:7,n:'Signature Gold Chain',p:799,basePrice:799,c:'Chains',d:'Minimal signature chain designed to pair beautifully with everyday outfits.',t:'NEW',i:'assets/product3.jpg',s:10},{id:8,n:'Pearl Hair Accessory',p:399,basePrice:399,c:'Hair Accessories',d:'Pearl-inspired hair accessory for an elegant finishing touch.',t:'NEW',i:'assets/product2.jpg',s:10}];
 const DEFAULT_CATS=['Earrings','Bracelets','Rings','Chains'];const HIDDEN_CATEGORIES=new Set(['necklaces','hair accessories']);function normalizeAdminCategories(list){const src=Array.isArray(list)?list:[];const custom=src.map(x=>String(x||'').trim().replace(/\s+/g,' ')).filter(Boolean).filter(c=>!HIDDEN_CATEGORIES.has(c.toLowerCase()));return [...new Set([...DEFAULT_CATS,...custom])];}
 function readJSON(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch(e){return f}}
-function safeSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));window.cajLastSync=syncKeyToSupabase(k,v);return true}catch(e){alert('Browser storage full. Product photos ko thoda kam/size chhota karke try karo.');return false}}
-async function syncKeyToSupabase(k,v){if(k==='cajProducts'){await sbFetch('products?id=not.is.null',{method:'DELETE',headers:{Prefer:'return=minimal'}});const rows=(v||[]).map(localToDb);if(rows.length)await sbFetch('products',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(rows)})}else if(k==='cajCategories'){await sbFetch('categories?id=not.is.null',{method:'DELETE',headers:{Prefer:'return=minimal'}});const rows=(v||[]).map(name=>({name}));if(rows.length)await sbFetch('categories',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(rows)})}else if(k==='cajAnnouncement'){await sbFetch('site_settings?setting_key=eq.announcement',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({setting_value:String(v||''),updated_at:new Date().toISOString()})})}else if(k==='cajCategoryIcons'){await sbFetch('site_settings?on_conflict=setting_key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({setting_key:'category_icons',setting_value:JSON.stringify(v||{}),updated_at:new Date().toISOString()})})}else if(k==='cajHeroSettings'){await sbFetch('site_settings?on_conflict=setting_key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({setting_key:'hero_settings',setting_value:JSON.stringify(v||{}),updated_at:new Date().toISOString()})})}else if(k==='cajPromoPoster'){await sbFetch('site_settings?on_conflict=setting_key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({setting_key:'promo_poster',setting_value:JSON.stringify(v||{}),updated_at:new Date().toISOString()})})}return true}
+function safeSet(k,v){try{localStorage.setItem('cajProducts',JSON.stringify(v))}catch(e){console.warn('Local browser cache full; live Supabase remains source of truth.',e)}window.cajLastSync=syncKeyToSupabase(k,v);return true}
+async function syncKeyToSupabase(k,v){
+  if(k==='cajProducts'){
+    const rows=(v||[]).map(localToDb);
+    const liveIds=new Set(products.map(p=>Number(p.id)).filter(Number.isFinite));
+    await Promise.all(rows.map(async row=>{
+      if(Number.isFinite(Number(row.id)) && liveIds.has(Number(row.id))){
+        await sbFetch('products?id=eq.'+encodeURIComponent(row.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(row)});
+      }else{
+        const body={...row};delete body.id;
+        await sbFetch('products',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(body)});
+      }
+    }));
+  }else if(k==='cajCategories'){
+    const names=normalizeAdminCategories(v||[]);
+    for(const name of names){
+      const existing=await sbFetch('categories?name=eq.'+encodeURIComponent(name)+'&select=id,name');
+      if(!Array.isArray(existing)||!existing.length) await sbFetch('categories',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify({name})});
+    }
+  }else if(k==='cajAnnouncement'){
+    await sbFetch('site_settings?setting_key=eq.announcement',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({setting_value:String(v||''),updated_at:new Date().toISOString()})});
+  }else if(k==='cajCategoryIcons'){
+    await sbFetch('site_settings?on_conflict=setting_key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({setting_key:'category_icons',setting_value:JSON.stringify(v||{}),updated_at:new Date().toISOString()})});
+  }else if(k==='cajHeroSettings'){
+    await sbFetch('site_settings?on_conflict=setting_key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({setting_key:'hero_settings',setting_value:JSON.stringify(v||{}),updated_at:new Date().toISOString()})});
+  }else if(k==='cajPromoPoster'){
+    await sbFetch('site_settings?on_conflict=setting_key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({setting_key:'promo_poster',setting_value:JSON.stringify(v||{}),updated_at:new Date().toISOString()})});
+  }
+  return true;
+}
 
 async function migrateLocalIfDbEmpty(){try{const existing=await sbGetAll();if(Array.isArray(existing.products)&&existing.products.length===0){const lp=readJSON('cajProducts',[]);if(lp.length){const rows=lp.map(localToDb);await sbFetch('products',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(rows)})}}if(Array.isArray(existing.categories)&&existing.categories.length<=4){const lc=readJSON('cajCategories',[]);if(lc.length){await sbFetch('categories?id=not.is.null',{method:'DELETE',headers:{Prefer:'return=minimal'}});await sbFetch('categories',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(lc.map(name=>({name})))})}}const ann=readJSON('cajAnnouncement','');if(ann){await sbFetch('site_settings?setting_key=eq.announcement',{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({setting_value:String(ann),updated_at:new Date().toISOString()})})}const icons=readJSON('cajCategoryIcons',{});if(icons&&Object.keys(icons).length&&(!existing.categoryIcons||!Object.keys(existing.categoryIcons).length)){await sbFetch('site_settings?on_conflict=setting_key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({setting_key:'category_icons',setting_value:JSON.stringify(icons),updated_at:new Date().toISOString()})})}const hero=readJSON('cajHeroSettings',{});if(hero&&Object.keys(hero).length&&(!existing.heroSettings||!Object.keys(existing.heroSettings).length)){await sbFetch('site_settings?on_conflict=setting_key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({setting_key:'hero_settings',setting_value:JSON.stringify(hero),updated_at:new Date().toISOString()})})}const poster=readJSON('cajPromoPoster',{});if(poster&&Object.keys(poster).length&&(!existing.promoPoster||!Object.keys(existing.promoPoster).length)){await sbFetch('site_settings?on_conflict=setting_key',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({setting_key:'promo_poster',setting_value:JSON.stringify(poster),updated_at:new Date().toISOString()})})}}catch(e){console.warn('Initial migration skipped',e)}}
 
@@ -129,7 +157,7 @@ async function saveProduct(){
   const existing=editId!==null?products.find(x=>Number(x.id)===Number(editId)):null;const item={id:editId??(products.reduce((m,x)=>Math.max(m,Number(x.id)||0),0)+1),n:name,p:price,basePrice:existing?Number(existing.basePrice||price):price,discountPct:existing?Number(existing.discountPct||0):0,raisePct:existing?Number(existing.raisePct||0):0,c:document.getElementById('category').value||'',d:document.getElementById('description').value.trim(),s:stock,t:document.getElementById('tag').value||'NEW',i:pendingImages.slice()};
   try{
     if(editId!==null){products=products.map(x=>Number(x.id)===Number(editId)?{...x,...item}:x)}else products=[item,...products];
-    localStorage.setItem('cajProducts',JSON.stringify(products));
+    try{localStorage.setItem('cajProducts',JSON.stringify(products))}catch(e){console.warn('Product cache skipped:',e)}
     const db=localToDb(item); if(editId!==null) await sbFetch('products?id=eq.'+encodeURIComponent(item.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify(db)}); else await sbFetch('products',{method:'POST',headers:{Prefer:'return=minimal'},body:JSON.stringify(db)});
     render(); resetForm(); alert('Product successfully saved ✓');
   }catch(e){console.error(e);alert('Product save failed: '+(e.message||e));}
@@ -149,12 +177,12 @@ function toggleAll(type){
   document.querySelectorAll(`input[data-price-group="${type}"]`).forEach(x=>x.checked=!!all?.checked);
 }
 function selectedPricingCats(type){return [...document.querySelectorAll(`input[data-price-group="${type}"]:checked`)].map(x=>x.value)}
-async function persistPricing(){safeSet('cajProducts',products);try{await window.cajLastSync}catch(e){console.error(e)}}
+async function persistPricing(){const updates=products.map(p=>({id:Number(p.id),price:Number(p.p||0),base_price:Number(p.basePrice||p.p||0),discount_percent:Number(p.discountPct||0),price_raise_percent:Number(p.raisePct||0)})).filter(x=>Number.isFinite(x.id));await Promise.all(updates.map(u=>sbFetch('products?id=eq.'+encodeURIComponent(u.id),{method:'PATCH',headers:{Prefer:'return=minimal'},body:JSON.stringify({price:u.price,base_price:u.base_price,discount_percent:u.discount_percent,price_raise_percent:u.price_raise_percent})})));try{localStorage.setItem('cajProducts',JSON.stringify(products))}catch(e){console.warn('Product cache skipped:',e)}}
 async function applyDiscount(){
   const cats=selectedPricingCats('discount'),pct=Number(document.getElementById('discountPct')?.value);
   if(!cats.length)return alert('Discount ke liye category select karo.');
   if(!Number.isFinite(pct)||pct<0||pct>100)return alert('0 se 100 ke beech discount % bharo.');
-  products=products.map(p=>{if(!cats.includes(p.c))return p;const base=Number(p.basePrice||p.p||0);return {...p,basePrice:base,discountPct:pct,raisePct:Number(p.raisePct||0),p:Math.round(base*(1-Number(p.raisePct||0)/100)*(1-pct/100))}});
+  products=products.map(p=>{if(!cats.includes(p.c))return p;const base=Number(p.basePrice||p.p||0),raise=Number(p.raisePct||0),increased=base*(1+raise/100);return {...p,basePrice:base,discountPct:pct,raisePct:raise,p:Math.round(increased*(1-pct/100))}});
   await persistPricing();render();renderPricingCats();alert('Discount successfully applied.');
 }
 async function applyRaise(){
@@ -179,18 +207,18 @@ function promoPosterCompress(file){
     r.onload=()=>{
       const img=new Image();
       img.onload=()=>{
-        const max=1400,scale=Math.min(1,max/img.width,max/img.height);
+        const max=900,scale=Math.min(1,max/img.width,max/img.height);
         const c=document.createElement('canvas');
         c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));
         c.getContext('2d').drawImage(img,0,0,c.width,c.height);
-        resolve(c.toDataURL('image/jpeg',.80));
+        resolve(c.toDataURL('image/jpeg',.68));
       };
       img.onerror=reject;img.src=r.result;
     };
     r.onerror=reject;r.readAsDataURL(file);
   });
 }
-function readPromoPoster(){return readJSON('cajPromoPoster',{})||{}}
+function readPromoPoster(){return (window.promoPoster&&typeof window.promoPoster==='object')?window.promoPoster:(readJSON('cajPromoPoster',{})||{})}
 function posterArray(){
   const raw=readPromoPoster();
   const arr=Array.isArray(raw.posters)?raw.posters.slice(0,5):[];
@@ -234,9 +262,8 @@ async function savePromoPosters(){
   const arr=window.cajPromoPosterDraft||posterArray();
   const out=arr.map((p,i)=>({image:String(p.image||''),link:String(document.getElementById('promoPosterLink'+i)?.value||p.link||'').trim(),alt:String(document.getElementById('promoPosterAlt'+i)?.value||p.alt||'').trim()})).filter(p=>p.image).slice(0,5);
   const payload={posters:out};
-  if(!safeSet('cajPromoPoster',payload))return;
-  try{await window.cajLastSync;window.cajPromoPosterDraft=posterArray();document.getElementById('posterSaveStatus').textContent='Saved to Supabase ✓';alert('Posters successfully saved. Store par live sync ho gaya.');}
-  catch(e){document.getElementById('posterSaveStatus').textContent='Save sync failed';alert('Poster local me save hua, lekin Supabase sync nahi hua: '+(e.message||e));}
+  try{await syncKeyToSupabase('cajPromoPoster',payload);window.promoPoster=payload;window.cajPromoPosterDraft=out;try{localStorage.setItem('cajPromoPoster',JSON.stringify(payload))}catch(e){};document.getElementById('posterSaveStatus').textContent='Saved to Supabase ✓';alert('Posters successfully saved. Store par live sync ho gaya.');}
+  catch(e){document.getElementById('posterSaveStatus').textContent='Save sync failed';alert('Poster Supabase me save nahi hua: '+(e.message||e));}
 }
 function clearPromoPosters(){
   if(!confirm('Saare promotional posters remove karne hain?'))return;

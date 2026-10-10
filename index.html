@@ -56,7 +56,7 @@
 .stock-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;background:rgba(255,253,249,.72);z-index:3;pointer-events:none}.stock-overlay span{display:inline-block;font:800 22px/1 Inter,Arial,sans-serif;letter-spacing:2px;color:#8b1e1e;text-transform:uppercase;border:2px solid #8b1e1e;padding:12px 16px;background:rgba(255,255,255,.94);box-shadow:0 3px 12px rgba(0,0,0,.12)}.card .pic{position:relative}.card.is-out .add{opacity:.5;cursor:not-allowed}.stock-filter{border:1px solid #b87917;background:#fffaf4;color:#222;padding:10px 16px;margin:12px auto;display:block;font-size:11px;letter-spacing:.5px}</style><style id="caj-mobile-header-fix">@media(max-width:700px){.header{position:sticky;top:0;z-index:40;background:#fffdf9;box-shadow:0 2px 10px rgba(70,45,20,.08)}nav{top:82px;z-index:39}.topbar{position:relative;z-index:41}}</style>
 <style>.hero{background-image:linear-gradient(90deg,rgba(255,250,244,.98) 0%,rgba(255,250,244,.82) 38%,rgba(255,250,244,.15) 68%,rgba(255,250,244,0) 100%),var(--caj-hero-desktop, url('assets/hero.jpg'));background-size:100% 100%,cover;background-position:center,center;background-repeat:no-repeat}.hero::before,.hero::after{display:none}@media(max-width:700px){.hero{background-image:linear-gradient(180deg,rgba(255,250,244,.98) 0%,rgba(255,250,244,.9) 35%,rgba(255,250,244,.38) 62%,rgba(255,250,244,.08) 100%),var(--caj-hero-mobile, url('assets/hero-mobile.jpg'));background-size:100% 100%,cover;background-position:center,center}}</style><style id="caj-promo-poster-style">
 .caj-promo-poster-section{padding:22px 16px 12px;background:#fffdf9;border-bottom:1px solid #eadccd}
-.caj-promo-poster-carousel{width:min(100%,520px);margin:0 auto;display:flex;align-items:center;gap:10px}
+.caj-promo-poster-carousel{position:relative;width:min(100%,680px);margin:0 auto;display:flex;align-items:center;gap:10px}
 .caj-promo-poster-viewport{width:100%;overflow:hidden;touch-action:pan-y;border-radius:2px}
 .caj-promo-poster-track{display:flex;transition:transform .42s ease;will-change:transform}
 .caj-promo-poster-slide{flex:0 0 100%;width:100%;margin:0;display:block;aspect-ratio:4/5;background:#f7f0e8}
@@ -66,7 +66,7 @@
 .caj-poster-dots{display:flex;justify-content:center;gap:6px;margin-top:10px}
 .caj-poster-dot{width:7px;height:7px;border-radius:50%;border:1px solid #c99a52;background:#fff;padding:0}
 .caj-poster-dot.active{background:#b87917;border-color:#b87917}
-@media(max-width:700px){.caj-promo-poster-section{padding:14px 12px 9px}.caj-promo-poster-carousel{width:100%;gap:6px}.caj-poster-arrow{width:28px;height:28px;flex-basis:28px;font-size:23px;line-height:24px}.caj-promo-poster-viewport{border-radius:0}.caj-poster-dots{margin-top:8px}}
+@media(max-width:700px){.caj-promo-poster-section{padding:14px 0 9px}.caj-promo-poster-carousel{width:100%;gap:0}.caj-promo-poster-viewport{width:100%;border-radius:0}.caj-poster-arrow{position:absolute;top:50%;transform:translateY(-50%);width:30px;height:30px;flex:0 0 30px;font-size:23px;line-height:24px}.caj-poster-prev{left:8px}.caj-poster-next{right:8px}.caj-poster-dots{margin-top:8px}}
 </style>
 <style id="caj-mobile-fixes-v4-final">
 @media(max-width:700px){
@@ -156,7 +156,7 @@
 // Supabase connection for cross-device store sync (publishable key only)
 const SUPABASE_URL='https://apquxhknzenmgcfruoqn.supabase.co';
 const SUPABASE_KEY='sb_publishable_SzG2qt5715ugKCrFf1IFjw_82_Heinx';
-window.CAJ_LIVE_SYNC_VERSION='V3-MOBILE-NAV-BACK-POSTER-2026-10-10';
+window.CAJ_LIVE_SYNC_VERSION='V3-MOBILE-NAV-BACK-POSTER-PRIORITY-SIZE-2026-10-10';
 async function sbFetch(path, options={}){const headers={apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json',...(options.headers||{})};const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{cache:'no-store',...options,headers});if(!r.ok) throw new Error(await r.text());return r.status===204?null:r.json()}
 async function sbGetAll(){
   const [psR,csR,ssR]=await Promise.allSettled([
@@ -176,9 +176,13 @@ async function sbGetAll(){
   const parseSettingValue=v=>{if(v&&typeof v==='object')return v;if(typeof v==='string'&&v.trim()){try{return JSON.parse(v)}catch(e){return {}}}return {}};
   categoryIcons=parseSettingValue(iconRaw);
   heroSettings=parseSettingValue(heroRaw);
-  const posterCandidates=settings.filter(x=>['promo_poster','promo_posters'].includes(x.setting_key)).map(x=>parseSettingValue(x.setting_value));
+  const posterRows=settings.filter(x=>['promo_poster','promo_posters'].includes(x.setting_key));
+  const parsePosterRow=k=>parseSettingValue(posterRows.find(x=>x.setting_key===k)?.setting_value);
   const hasPoster=v=>Array.isArray(v?.posters)?v.posters.some(p=>p&&p.image):!!v?.image;
-  promoPoster=posterCandidates.find(hasPoster)||posterCandidates[0]||{};
+  const currentPoster=parsePosterRow('promo_poster');
+  const legacyPoster=parsePosterRow('promo_posters');
+  // Admin saves to promo_poster; always prefer that current setting over any stale legacy promo_posters value.
+  promoPoster=hasPoster(currentPoster)?currentPoster:(hasPoster(legacyPoster)?legacyPoster:(currentPoster&&Object.keys(currentPoster).length?currentPoster:legacyPoster||{}));
   return {products:ps,categories:cs,announcement:ann,categoryIcons,heroSettings,promoPoster};
 }
 function localToDb(p){return {id:typeof p.id==='number'?p.id:undefined,name:p.n||'',price:Number(p.p||0),base_price:Number(p.basePrice||p.p||0),category:p.c||'',description:p.d||'',stock:Number(p.s||0),tag:p.t||'NEW',images:Array.isArray(p.i)?p.i.filter(Boolean):[],discount_percent:Number(p.discountPct||0),price_raise_percent:Number(p.raisePct||0)}}

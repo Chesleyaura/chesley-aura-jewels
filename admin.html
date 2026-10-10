@@ -233,14 +233,17 @@ function loadPromoPosterManager(){
     <label>Poster Image</label>
     <input id="promoPosterFile${i}" type="file" accept="image/*" onchange="previewPromoPosterFile(event,${i})">
     <div class="poster-manager-preview" id="promoPosterPreview${i}" style="${p.image?'display:block':'display:none'}">${p.image?`<img src="${esc(p.image)}" alt="Poster ${i+1}">`:''}</div>
-    <label>Click Link <span style="font-weight:400;color:#777">(optional)</span></label>
-    <input id="promoPosterLink${i}" value="${esc(p.link||'')}" placeholder="#products or https://...">
+    <label>Click Category</label>
+    <select id="promoPosterCategory${i}" onchange="updatePromoPosterCategory(${i},this.value)">
+      ${['All Items',...normalizeAdminCategories(window.cajCategories||readJSON('cajCategories',[])||[])].filter((v,j,ar)=>ar.indexOf(v)===j).map(c=>`<option value="${esc(c)}" ${(String(p.category||'All Items').toLowerCase()===String(c).toLowerCase() || (c==='All Items'&&!p.category))?'selected':''}>${esc(c)}</option>`).join('')}
+    </select>
     <label>Alt Text</label>
     <input id="promoPosterAlt${i}" value="${esc(p.alt||'')}" placeholder="Poster ${i+1}">
     <button class="ghost" style="margin-top:10px" onclick="removePromoPoster(${i})">REMOVE THIS POSTER</button>
   </div>`).join('');
   window.cajPromoPosterDraft=arr;
 }
+function updatePromoPosterCategory(index,value){window.cajPromoPosterDraft=window.cajPromoPosterDraft||posterArray();window.cajPromoPosterDraft[index]={...(window.cajPromoPosterDraft[index]||{}),category:value};}
 async function previewPromoPosterFile(e,index){
   const f=e.target.files&&e.target.files[0];if(!f)return;
   try{
@@ -260,16 +263,16 @@ function removePromoPoster(index){
 }
 async function savePromoPosters(){
   const arr=window.cajPromoPosterDraft||posterArray();
-  const out=arr.map((p,i)=>({image:String(p.image||''),link:String(document.getElementById('promoPosterLink'+i)?.value||p.link||'').trim(),alt:String(document.getElementById('promoPosterAlt'+i)?.value||p.alt||'').trim()})).filter(p=>p.image).slice(0,5);
+  const out=arr.map((p,i)=>({image:String(p.image||''),category:String(document.getElementById('promoPosterCategory'+i)?.value||p.category||'All Items').trim(),alt:String(document.getElementById('promoPosterAlt'+i)?.value||p.alt||'').trim()})).filter(p=>p.image).slice(0,5);
   const payload={posters:out};
   try{await syncKeyToSupabase('cajPromoPoster',payload);window.promoPoster=payload;window.cajPromoPosterDraft=out;try{localStorage.setItem('cajPromoPoster',JSON.stringify(payload))}catch(e){};document.getElementById('posterSaveStatus').textContent='Saved to Supabase ✓';alert('Posters successfully saved. Store par live sync ho gaya.');}
   catch(e){document.getElementById('posterSaveStatus').textContent='Save sync failed';alert('Poster Supabase me save nahi hua: '+(e.message||e));}
 }
-function clearPromoPosters(){
+async function clearPromoPosters(){
   if(!confirm('Saare promotional posters remove karne hain?'))return;
-  window.cajPromoPosterDraft=[{image:'',link:'',alt:''},{image:'',link:'',alt:''},{image:'',link:'',alt:''},{image:'',link:'',alt:''},{image:'',link:'',alt:''}];
-  if(!safeSet('cajPromoPoster',{posters:[]}))return;
-  loadPromoPosterManager();
-  alert('All posters removed. Store refresh karo.');
+  const payload={posters:[]};
+  const status=document.getElementById('posterSaveStatus');
+  try{await syncKeyToSupabase('cajPromoPoster',payload);window.promoPoster=payload;window.cajPromoPosterDraft=[{image:'',category:'All Items',alt:''},{image:'',category:'All Items',alt:''},{image:'',category:'All Items',alt:''},{image:'',category:'All Items',alt:''},{image:'',category:'All Items',alt:''}];try{localStorage.setItem('cajPromoPoster',JSON.stringify(payload))}catch(e){};loadPromoPosterManager();if(status)status.textContent='All posters removed from Supabase ✓';alert('All posters removed successfully.');}
+  catch(e){if(status)status.textContent='Remove sync failed';alert('Posters remove nahi hue: '+(e.message||e));}
 }
 </script></body></html>

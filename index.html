@@ -174,6 +174,7 @@ const SUPABASE_URL='https://apquxhknzenmgcfruoqn.supabase.co';
 const SUPABASE_KEY='sb_publishable_SzG2qt5715ugKCrFf1IFjw_82_Heinx';
 window.CAJ_LIVE_SYNC_VERSION='V3-MOBILE-NAV-BACK-POSTER-PRIORITY-SIZE-2026-10-10';
 async function sbFetch(path, options={}){const headers={apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json',...(options.headers||{})};const r=await fetch(SUPABASE_URL+'/rest/v1/'+path,{cache:'no-store',...options,headers});if(!r.ok) throw new Error(await r.text());return r.status===204?null:r.json()}
+async function sbFetchAllRows(path,pageSize=100){const all=[];for(let offset=0;;offset+=pageSize){const rows=await sbFetch(path,{headers:{Range:`${offset}-${offset+pageSize-1}`,'Range-Unit':'items'}});if(!Array.isArray(rows))throw new Error('Unexpected response while loading '+path);all.push(...rows);if(rows.length<pageSize)break;}return all;}
 async function sbGetAll(){
   const [psR,csR,ssR]=await Promise.allSettled([
     sbFetch('products?select=*&order=created_at.desc'),
@@ -467,12 +468,7 @@ function cajPosterPrev(){const n=(window.cajPosterSlides||[]).length;if(n>1)cajP
 function cajPosterBindSwipe(){const v=document.getElementById('promoPosterViewport');if(!v||v.dataset.swipeBound)return;v.dataset.swipeBound='1';let sx=0,sy=0;v.addEventListener('touchstart',e=>{const t=e.touches[0];sx=t.clientX;sy=t.clientY},{passive:true});v.addEventListener('touchend',e=>{const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.15){dx<0?cajPosterNext():cajPosterPrev()}},{passive:true})}
 function renderAnnouncement(){const bar=document.querySelector('#announcementBar');const text=document.querySelector('#announcementText');const value=String(announcement||'').trim();if(text)text.textContent=value;if(bar)bar.style.display=value?'block':'none';}
 cajEnsureBaseHistory();
-(function(){try{
-  // First paint: use cached public settings/products instead of clearing the page.
-  renderAnnouncement();renderPromoPoster();renderCategories();render();
-  try{applyHeroSettings()}catch(e){console.warn('Cached hero apply failed',e)}
-}catch(e){console.warn('Initial cached render failed',e)}})();
-// FAST FIRST PAINT: show cached storefront and the default/cached hero before any network request.
+// First paint once from the existing local cache; fresh Supabase data replaces it automatically.
 try{renderAnnouncement();renderPromoPoster();renderCategories();render();applyHeroSettings()}catch(e){console.warn('Cached first paint skipped',e)}
 // Refresh categories/settings independently from the heavier product/image request.
 async function loadStoreSettingsFast(){
@@ -510,7 +506,7 @@ async function loadStoreSettingsFast(){
   // Do not make the headline/Hero/poster wait for product images to download.
   const settingsTask=loadStoreSettingsFast().catch(e=>console.warn('Settings sync failed',e));
   try{
-    const raw=await sbFetch('products?select=*&order=created_at.desc');
+    const raw=await sbFetchAllRows('products?select=*&order=created_at.desc',100);
     if(!Array.isArray(raw))throw new Error('Products response was not an array');
     products=raw.map(dbToLocal);window.products=products;window.cajStoreLoading=false;
     try{cajMemoryStorage.setItem('cajProducts',JSON.stringify(products))}catch(e){}
